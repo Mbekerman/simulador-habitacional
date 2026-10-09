@@ -14,7 +14,7 @@ test('linha vazia respeita dados até AZ e começa na linha 3', () => {
 
 test('registro preserva zeros, CPF como texto e fuso de Brasília', () => {
   const row=buildRow({perfil:'cliente',cpf:'01234567890',data_nascimento:'2000-01-02',renda_mensal:2000,valor_imovel:200000}, {valor_financiamento:100000,valor_subsidio:0},new Date('2026-10-09T15:00:00Z'));
-  assert.equal(row.length,21);
+  assert.equal(row.length,22);
   assert.equal(row[2],'01234567890');
   assert.equal(row[14],0);
   assert.equal(row[16],'12:00:00');
