@@ -2,7 +2,7 @@ function browserSimID(){
  const match=document.cookie.split(';').map(value=>value.trim()).find(value=>value.startsWith('SimID='));
  let id='';try{id=match?decodeURIComponent(match.slice(6)):'';}catch{}
  if(!id)id=crypto.randomUUID();
- document.cookie='SimID='+encodeURIComponent(id)+'; Max-Age=2592000; Path=/; SameSite=Lax'+(location.protocol==='https:'?'; Secure':'');
+ document.cookie='SimID='+encodeURIComponent(id)+'; Max-Age=31536000; Path=/; SameSite=Lax'+(location.protocol==='https:'?'; Secure':'');
  return id;
 }
 const simID=browserSimID();
