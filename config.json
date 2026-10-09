@@ -1,0 +1,13 @@
+{
+  "tipo_financiamento": "1",
+  "categoria_imovel": "1",
+  "possui_subsidio_fgts_uniao": false,
+  "possui_imovel_municipio": false,
+  "relacionamento_caixa": false,
+  "servidor_publico": false,
+  "conta_salario": false,
+  "autoriza_armazenamento": true,
+  "sistema_amortizacao": "PRICE",
+  "valor_entrada": 0,
+  "prazo_meses": 420
+}
