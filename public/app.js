@@ -32,10 +32,6 @@ for(const name of ['renda_mensal','valor_imovel']){
     input.setSelectionRange(position,position);
   });
 }
-function formatBirthDate(value){
-  const d=digits(value).slice(0,8);
-  return d.replace(/^(\d{2})(\d)/,'$1/$2').replace(/^(\d{2}\/\d{2})(\d)/,'$1/$2');
-}
 function birthDateISO(value){
   const match=/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
   if(!match)return '';
@@ -45,17 +41,26 @@ function birthDateISO(value){
   if(Number(year)<1900||date.getFullYear()!==Number(year)||date.getMonth()!==Number(month)-1||date.getDate()!==Number(day)||date>today)return '';
   return year+'-'+month+'-'+day;
 }
-form.data_nascimento.addEventListener('input',()=>{
-  const input=form.data_nascimento;
-  const raw=input.value;
-  const caret=input.selectionStart??raw.length;
-  const digitsToLeft=digits(raw.slice(0,caret)).length;
-  input.value=formatBirthDate(raw);
-  let position=0,remaining=digitsToLeft;
-  while(position<input.value.length&&remaining>0){if(/\d/.test(input.value[position]))remaining--;position++;}
-  if(input.value[position]==='/')position++;
-  input.setSelectionRange(position,position);
-});
+const birthDateParts=['day','month','year'].map(part=>form.querySelector('[data-birth-part="'+part+'"]'));
+function syncBirthDate(){
+  const values=birthDateParts.map(input=>input.value);
+  form.data_nascimento.value=values.some(Boolean)?values.join('/'):'';
+  form.data_nascimento.dispatchEvent(new Event('input',{bubbles:true}));
+}
+function restoreBirthDateParts(){
+  const values=form.data_nascimento.value.split('/');
+  birthDateParts.forEach((input,index)=>{input.value=values[index]||'';});
+}
+for(const input of birthDateParts){
+  input.addEventListener('input',()=>{
+    input.value=digits(input.value).slice(0,input.maxLength);
+    syncBirthDate();
+  });
+  input.addEventListener('blur',()=>{
+    if(input.maxLength===2&&input.value.length===1)input.value=input.value.padStart(2,'0');
+    syncBirthDate();
+  });
+}
 
 const initialNames=['nome','cpf','email','telefone'];
 function initialError(input){
@@ -83,7 +88,7 @@ form.querySelectorAll('[name=perfil]').forEach(input=>input.addEventListener('ch
 updateGate();
 
 function rows(target,values){target.replaceChildren();for(const [key,value]of values){const div=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=value??'Não informado';div.append(dt,dd);target.append(div);}}
-function validate(){let ok=true;const section=form;section.querySelectorAll('small').forEach(el=>el.textContent='');for(const input of section.querySelectorAll('input:not([type=radio])')){if(input.matches(':disabled'))continue;let error='';if(initialNames.includes(input.name))error=initialError(input);else if(!input.value.trim())error='Campo obrigatório.';else if(input.name==='cpf'&&!validCpf(input.value))error='Informe um CPF válido.';else if(input.name==='email'&&!input.validity.valid)error='Informe um e-mail válido.';else if(input.name==='telefone'&&!/^\d{10,11}$/.test(digits(input.value)))error='Informe telefone com DDD.';else if(['valor_imovel','renda_mensal'].includes(input.name)&&!(amount(input.value)>0))error='Informe um valor maior que zero.';else if(input.name==='data_nascimento'&&!birthDateISO(input.value))error='Informe uma data válida.';input.setAttribute('aria-invalid',Boolean(error));(input.closest('label')||input.parentElement).querySelector('small').textContent=error;if(error)ok=false;}for(const fieldset of section.querySelectorAll('fieldset.question,fieldset.profile-field'))if(!fieldset.matches(':disabled')&&!fieldset.querySelector('input:checked')){fieldset.querySelector('small').textContent='Escolha uma opção.';ok=false;}if(initialValid()&&!validateLocation())ok=false;if(!initialValid()){ok=false;updateGate();}if(!ok){document.querySelector('#error').textContent='Revise os campos destacados.';section.querySelector('[aria-invalid="true"],fieldset:has(small:not(:empty)) input')?.focus();}return ok;}
+function validate(){let ok=true;const section=form;section.querySelectorAll('small').forEach(el=>el.textContent='');for(const input of section.querySelectorAll('input:not([type=radio]):not([data-birth-part])')){if(input.matches(':disabled'))continue;let error='';if(initialNames.includes(input.name))error=initialError(input);else if(!input.value.trim())error='Campo obrigatório.';else if(input.name==='cpf'&&!validCpf(input.value))error='Informe um CPF válido.';else if(input.name==='email'&&!input.validity.valid)error='Informe um e-mail válido.';else if(input.name==='telefone'&&!/^\d{10,11}$/.test(digits(input.value)))error='Informe telefone com DDD.';else if(['valor_imovel','renda_mensal'].includes(input.name)&&!(amount(input.value)>0))error='Informe um valor maior que zero.';else if(input.name==='data_nascimento'&&!birthDateISO(input.value))error='Informe uma data válida.';if(input.name==='data_nascimento'){birthDateParts.forEach(part=>part.setAttribute('aria-invalid',Boolean(error)));}else input.setAttribute('aria-invalid',Boolean(error));(input.closest('label')||input.parentElement).querySelector('small').textContent=error;if(error)ok=false;}for(const fieldset of section.querySelectorAll('fieldset.question,fieldset.profile-field'))if(!fieldset.matches(':disabled')&&!fieldset.querySelector('input:checked')){fieldset.querySelector('small').textContent='Escolha uma opção.';ok=false;}if(initialValid()&&!validateLocation())ok=false;if(!initialValid()){ok=false;updateGate();}if(!ok){document.querySelector('#error').textContent='Revise os campos destacados.';section.querySelector('[aria-invalid="true"],fieldset:has(small:not(:empty)) input')?.focus();}return ok;}
 function result(data){const target=document.querySelector('#result-content');target.replaceChildren();const heading=document.createElement('h2');heading.textContent=data.produto?.nome||'Condições do financiamento';const dl=document.createElement('dl');rows(dl,[['Valor do imóvel',money(data.valor_imovel)],['Subsídio',money(data.valor_subsidio||0)],['Entrada',money(data.valor_entrada)],['Financiamento',money(data.valor_financiamento)],['Prazo',data.prazo_meses+' meses'],['Amortização',data.sistema_amortizacao],['Juros nominais',data.juros_nominais_percentual+'%'],['Juros efetivos',data.juros_efetivos_percentual+'%'],['CET',data.cet_percentual===null?'Não informado':data.cet_percentual+'%'],['Seguradora',data.seguradora?.nome]]);target.append(heading,dl);const installments=data.parcelas||[];if(installments.length){const details=document.createElement('details'),summary=document.createElement('summary'),wrap=document.createElement('div'),table=document.createElement('table');summary.textContent='Ver parcelas';wrap.className='table-wrap';const head=document.createElement('thead'),tr=document.createElement('tr');for(const label of ['Parcela','Vencimento','Prestação','Saldo devedor']){const th=document.createElement('th');th.textContent=label;tr.append(th);}head.append(tr);const body=document.createElement('tbody');for(const p of installments){const row=document.createElement('tr');for(const value of [p.numero,p.vencimento,money(p.prestacao),money(p.saldo_devedor)]){const td=document.createElement('td');td.textContent=value;row.append(td);}body.append(row);}table.append(head,body);wrap.append(table);details.append(summary,wrap);target.append(details);}}
 let lastGPSLocation='';const pendingGPSRows=new Set();
 async function syncGPSRows(){if(!lastGPSLocation||lastGPSLocation.startsWith('Aguardando'))return;for(const token of [...pendingGPSRows]){try{const response=await fetch('/api/location-result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,location:lastGPSLocation})});if(response.ok)pendingGPSRows.delete(token);}catch{}}}
@@ -182,12 +187,12 @@ async function restoreDraft(){
  restoringDraft=true;const draftAtStart=draftRevision;
  try{
   for(const name of draftFields){if(typeof saved[name]!=='string')continue;const field=form.elements.namedItem(name);if(field instanceof RadioNodeList){for(const radio of field)radio.checked=radio.value===saved[name];}else field.value=name==='data_nascimento'&&/^\d{4}-\d{2}-\d{2}$/.test(saved[name])?saved[name].split('-').reverse().join('/'):saved[name];}
-  updateGate();
+  restoreBirthDateParts();updateGate();
   resetLocation();form.uf.value='';
   syncLocation(initialValid());
  }finally{restoringDraft=false;saveDraft();}
 }
 restoreDraft();
 
-form.addEventListener('input',updateSimulateButton);form.addEventListener('change',updateSimulateButton);form.addEventListener('reset',()=>setTimeout(updateSimulateButton,0));document.addEventListener('gatechange',updateSimulateButton);statesReady.then(updateSimulateButton);updateSimulateButton();
+form.addEventListener('input',updateSimulateButton);form.addEventListener('change',updateSimulateButton);form.addEventListener('reset',()=>setTimeout(()=>{restoreBirthDateParts();birthDateParts.forEach(input=>input.removeAttribute('aria-invalid'));updateSimulateButton();},0));document.addEventListener('gatechange',updateSimulateButton);statesReady.then(updateSimulateButton);updateSimulateButton();
 

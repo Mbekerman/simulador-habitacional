@@ -7,3 +7,10 @@
 #compare-sac{margin-top:20px}
 
 .form-actions-top{display:flex;justify-content:flex-end;margin-bottom:20px}
+
+.birthdate-parts{display:flex;align-items:center;gap:4px;margin-top:8px;min-height:46px;border:1px solid #9fb7c6;border-radius:4px;background:white;padding:0 6px}
+.birthdate-parts input{width:3.5ch;min-width:0;flex:1;margin:0;border:0;text-align:center;padding:12px 4px}
+.birthdate-parts input[data-birth-part=year]{flex:1.5}
+.birthdate-parts span{color:#637b8c;font-weight:400}
+.birthdate-parts:has(input[aria-invalid=true]){border-color:#c02525}
+.birthdate-parts input:focus{outline-offset:-3px}
