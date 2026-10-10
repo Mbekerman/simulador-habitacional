@@ -38,7 +38,7 @@ function birthDateISO(value){
   const [,day,month,year]=match;
   const date=new Date(Number(year),Number(month)-1,Number(day));
   const today=new Date();today.setHours(0,0,0,0);
-  if(Number(year)<1900||date.getFullYear()!==Number(year)||date.getMonth()!==Number(month)-1||date.getDate()!==Number(day)||date>today)return '';
+  if(Number(year)<1920||date.getFullYear()!==Number(year)||date.getMonth()!==Number(month)-1||date.getDate()!==Number(day)||date>today)return '';
   return year+'-'+month+'-'+day;
 }
 const birthDateParts=['day','month','year'].map(part=>form.querySelector('[data-birth-part="'+part+'"]'));
@@ -56,16 +56,41 @@ function syncBirthDate(){
 }
 function restoreBirthDateParts(){
   const values=form.data_nascimento.value.split('/');
-  birthDateParts.forEach((input,index)=>{input.value=values[index]||'';});
+  birthDateParts.forEach((input,index)=>{input.value=values[index]||'';input.dataset.acceptedValue=input.value;});
   sizeBirthDateParts();
 }
-for(const input of birthDateParts){
+function birthPartError(input,value){
+  if(value.length!==input.maxLength)return '';
+  const numeric=Number(value);
+  if(input===birthDateParts[0]&&(numeric<1||numeric>31))return 'Informe um dia entre 01 e 31.';
+  if(input===birthDateParts[1]&&(numeric<1||numeric>12))return 'Informe um mês entre 01 e 12.';
+  const currentYear=new Date().getFullYear();
+  if(input===birthDateParts[2]&&(numeric<1920||numeric>currentYear))return 'Informe um ano entre 1920 e '+currentYear+'.';
+  return '';
+}
+function showBirthPartError(input,error){
+  input.setAttribute('aria-invalid',Boolean(error));
+  form.querySelector('.birthdate-field small').textContent=error;
+}
+for(const [index,input] of birthDateParts.entries()){
+  input.dataset.acceptedValue='';
   input.addEventListener('input',()=>{
-    input.value=digits(input.value).slice(0,input.maxLength);
+    const candidate=digits(input.value).slice(0,input.maxLength);
+    const error=birthPartError(input,candidate);
+    input.value=error?input.dataset.acceptedValue:candidate;
+    if(!error)input.dataset.acceptedValue=candidate;
+    showBirthPartError(input,error);
     syncBirthDate();
+    if(!error&&candidate.length===2&&index<2)birthDateParts[index+1].focus();
   });
   input.addEventListener('blur',()=>{
-    if(input.maxLength===2&&input.value.length===1)input.value=input.value.padStart(2,'0');
+    if(input.maxLength===2&&input.value.length===1){
+      const candidate=input.value.padStart(2,'0');
+      const error=birthPartError(input,candidate);
+      input.value=error?'':candidate;
+      input.dataset.acceptedValue=input.value;
+      showBirthPartError(input,error);
+    }
     syncBirthDate();
   });
 }
