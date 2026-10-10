@@ -7,6 +7,10 @@ function browserSimID(){
 }
 const simID=browserSimID();
 const form=document.querySelector('#form');
+for(const input of form.querySelectorAll('input:not([type]),input[type="text"],input[type="email"],input[type="tel"],textarea')){
+  input.addEventListener('focus',()=>input.select());
+  input.addEventListener('click',()=>input.select());
+}
 const money=value=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(value));
 const digits=value=>value.replace(/\D/g,'');
 function amount(value){return Number(value.replace(/[^\d,]/g,'').replace(',','.'));}
