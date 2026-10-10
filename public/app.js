@@ -42,7 +42,14 @@ function birthDateISO(value){
   return year+'-'+month+'-'+day;
 }
 const birthDateParts=['day','month','year'].map(part=>form.querySelector('[data-birth-part="'+part+'"]'));
+function sizeBirthDateParts(){
+  for(const input of birthDateParts)input.previousElementSibling.textContent=input.value||input.placeholder;
+}
+form.querySelector('.birthdate-parts').addEventListener('click',event=>{
+  if(event.target===event.currentTarget)(birthDateParts.find(input=>!input.value)||birthDateParts[0]).focus();
+});
 function syncBirthDate(){
+  sizeBirthDateParts();
   const values=birthDateParts.map(input=>input.value);
   form.data_nascimento.value=values.some(Boolean)?values.join('/'):'';
   form.data_nascimento.dispatchEvent(new Event('input',{bubbles:true}));
@@ -50,6 +57,7 @@ function syncBirthDate(){
 function restoreBirthDateParts(){
   const values=form.data_nascimento.value.split('/');
   birthDateParts.forEach((input,index)=>{input.value=values[index]||'';});
+  sizeBirthDateParts();
 }
 for(const input of birthDateParts){
   input.addEventListener('input',()=>{
