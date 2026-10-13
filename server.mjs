@@ -1,3 +1,4 @@
+import {getPreferredModality} from './modalidades.mjs';
 import {randomUUID} from 'node:crypto';
 import {recordSimulation,updateGPS} from './sheets.mjs';
 import http from 'node:http';
@@ -32,20 +33,11 @@ async function finalizeInsurer(payload,result,product){
  return result;
 }
 async function configuredSimulation(payload){
- let lastError;
- for(const code of ['100501101','100501129','100501122']){
-  const attempt={...payload,produto_codigo:code};
-  delete attempt.produto_versao;
-  delete attempt.seguradora_codigo;
-  try{
-   const result=await simulate(attempt);
-   if(result.produto?.codigo!==code)throw new Error('A API retornou um produto diferente do solicitado.');
-   const product=result.produto;
-   attempt.produto_versao=product.versao;
-   return await finalizeInsurer(attempt,result,product);
-  }catch(error){lastError=error;}
- }
- throw lastError||new Error('Nenhum dos três produtos concluiu a simulação.');
+ const product=await getPreferredModality(payload,api,process.env.SIMULADOR_API_TOKEN);
+ const attempt={...payload,produto_codigo:product.codigo,produto_versao:product.versao};
+ delete attempt.seguradora_codigo;
+ const result=await simulate(attempt);
+ return await finalizeInsurer(attempt,result,product);
 }
 async function config(){return JSON.parse(await readFile(root+'config.json','utf8'));}
 http.createServer(async (req,res) => {
