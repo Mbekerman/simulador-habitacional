@@ -219,7 +219,7 @@ async function restoreDraft(){
  if(!saved||typeof saved!=='object')return;
  restoringDraft=true;const draftAtStart=draftRevision;
  try{
-  for(const name of draftFields){if(typeof saved[name]!=='string')continue;const field=form.elements.namedItem(name);if(field instanceof RadioNodeList){for(const radio of field)radio.checked=radio.value===saved[name];}else field.value=name==='data_nascimento'&&/^\d{4}-\d{2}-\d{2}$/.test(saved[name])?saved[name].split('-').reverse().join('/'):saved[name];}
+  for(const name of draftFields){if(typeof saved[name]!=='string'||(name==='perfil'&&!['cliente','corretor'].includes(saved[name])))continue;const field=form.elements.namedItem(name);if(field instanceof RadioNodeList){for(const radio of field)radio.checked=radio.value===saved[name];}else field.value=name==='data_nascimento'&&/^\d{4}-\d{2}-\d{2}$/.test(saved[name])?saved[name].split('-').reverse().join('/'):saved[name];}
   restoreBirthDateParts();updateGate();
   resetLocation();form.uf.value='';
   syncLocation(initialValid());
