@@ -159,7 +159,7 @@ function renderCities(){const query=normalize(cityInput.value);const matches=cit
 cityInput.addEventListener('focus',()=>{if(!cityInput.disabled)renderCities();});cityInput.addEventListener('input',()=>{locationEdited=true;selectedCity='';form.regiao.value='';syncLocation(initialValid());renderCities();});cityInput.addEventListener('blur',()=>{closeCities();if(cityInput.value&&!selectedCity){cityInput.setAttribute('aria-invalid','true');document.querySelector('#city-error').textContent='Selecione uma cidade na lista.';}});
 cityInput.addEventListener('keydown',event=>{if(event.key==='Escape'){closeCities();return;}if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();if(cityList.hidden)renderCities();const options=[...cityList.querySelectorAll('[role=option]')];if(!options.length)return;activeOption=(activeOption+(event.key==='ArrowDown'?1:-1)+options.length)%options.length;options.forEach((option,i)=>option.classList.toggle('highlighted',i===activeOption));cityInput.setAttribute('aria-activedescendant',options[activeOption].id);options[activeOption].scrollIntoView({block:'nearest'});}if(event.key==='Enter'&&!cityList.hidden){event.preventDefault();const options=[...cityList.querySelectorAll('[role=option]')];const option=options[activeOption>=0?activeOption:options.length===1?0:-1];if(option){locationEdited=true;geoStatus.textContent='Localização escolhida por você. Você pode alterá-la a qualquer momento.';chooseCity(cities.find(city=>city.nome===option.dataset.city));}}});
 function resetLocation(){requestId++;cities=[];selectedCity='';form.regiao.value='';form.regiao.disabled=true;cityLoading=false;cityInput.value='';cityInput.placeholder='Escolha o estado primeiro';cityStatus.textContent='';closeCities();updateSimulateButton();}
-async function loadCities(){resetLocation();document.querySelector('#result').hidden=true;document.querySelector('#city-error').textContent='';const uf=form.uf.value;const id=++requestId;if(!uf){syncLocation(initialValid());return;}cityLoading=true;cityStatus.textContent='Carregando cidades…';cityInput.placeholder='Carregando cidades…';syncLocation(initialValid());try{const response=await fetch('/api/municipios/'+uf);if(!response.ok)throw new Error();const list=await response.json();if(id!==requestId)return;const capital=normalize(capitals[uf]);cities=list.sort((a,b)=>{const ac=normalize(a.nome)===capital,bc=normalize(b.nome)===capital;return ac!==bc?ac?-1:1:a.nome.localeCompare(b.nome,'pt-BR',{sensitivity:'base'});});cityStatus.textContent='Capital primeiro. Digite para buscar, com ou sem acentos.';cityInput.placeholder='Busque e selecione a cidade';}catch{if(id!==requestId)return;cityStatus.textContent='Não foi possível carregar. Escolha novamente o estado para tentar de novo.';}finally{if(id===requestId){cityLoading=false;syncLocation(initialValid());}}}
+async function loadCities(){resetLocation();document.querySelector('#result').hidden=true;document.querySelector('#city-error').textContent='';const uf=form.uf.value;const id=++requestId;if(!uf){syncLocation(initialValid());return;}cityLoading=true;cityStatus.textContent='Carregando cidades…';cityInput.placeholder='Carregando cidades…';syncLocation(initialValid());try{const response=await fetch('/api/municipios/'+uf);if(!response.ok)throw new Error();const list=await response.json();if(id!==requestId)return;const capital=normalize(capitals[uf]);cities=list.sort((a,b)=>{const ac=normalize(a.nome)===capital,bc=normalize(b.nome)===capital;return ac!==bc?ac?-1:1:a.nome.localeCompare(b.nome,'pt-BR',{sensitivity:'base'});});cityStatus.textContent='Capital primeiro. Digite para buscar, com ou sem acentos.';cityInput.placeholder='Busque e selecione a cidade';}catch{if(id!==requestId)return;cityStatus.textContent='Não foi possível carregar. Escolha novamente o estado para tentar de novo.';}finally{if(id===requestId){cityLoading=false;syncLocation(initialValid());saveDraft();}}}
 form.uf.addEventListener('change',()=>{locationEdited=true;geoStatus.textContent='Localização escolhida por você. Selecione a cidade do imóvel.';loadCities();});
 function validateLocation(){let valid=true;const regionError=form.regiao.closest('label').querySelector('small');regionError.textContent=form.regiao.value?'':'Selecione a região do imóvel.';if(!['leste','oeste','norte','sul','centro'].includes(form.regiao.value))valid=false;const stateError=form.uf.closest('label').querySelector('small');stateError.textContent=form.uf.value?'':'Selecione o estado.';if(!form.uf.value)valid=false;if(!selectedCity||!cities.some(city=>city.nome===selectedCity)||cityInput.value!==selectedCity){document.querySelector('#city-error').textContent='Selecione uma cidade na lista.';cityInput.setAttribute('aria-invalid','true');valid=false;}return valid;}
 const statesReady=fetch('/api/ufs').then(response=>{if(!response.ok)throw new Error();return response.json();}).then(states=>{form.uf.replaceChildren(new Option('Selecione o estado',''));for(const state of states.sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')))form.uf.add(new Option(state.nome+' ('+state.sigla+')',state.sigla));statesLoaded=true;syncLocation(initialValid());}).catch(()=>{form.uf.replaceChildren(new Option('Falha ao carregar estados',''));cityStatus.textContent='Recarregue a página para tentar novamente.';});
@@ -206,26 +206,94 @@ gpsButton.addEventListener('click',()=>requestGPS(true));
 
 
 const draftKey='simulador-caixa:formulario:v1';
-let restoringDraft=false,draftRevision=0;
-const draftFields=['nome','cpf','email','telefone','perfil','data_nascimento','renda_mensal','valor_imovel','trabalho_fgts_3_anos','outro_comprador'];
+let restoringDraft=false,draftRevision=0,formURLTimer;
+const draftFields=['nome','cpf','email','telefone','perfil','data_nascimento','renda_mensal','valor_imovel','trabalho_fgts_3_anos','outro_comprador','uf','municipio','regiao'];
+function formURLValue(name,value){
+  value=value.trim();
+  if(!value)return '';
+  if(name==='cpf'||name==='telefone')return digits(value);
+  if(name==='data_nascimento')return birthDateISO(value)||value;
+  if(name==='renda_mensal'||name==='valor_imovel')return String(amount(value));
+  return value;
+}
+function formValueFromURL(name,value){
+  if(name==='cpf'){const d=digits(value).slice(0,11);return d.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1-$2');}
+  if(name==='telefone'){const d=digits(value).slice(0,11);return d.replace(/^(\d{2})(\d)/,'($1) $2').replace(/(\d{4,5})(\d{4})$/,'$1-$2');}
+  if(name==='data_nascimento'&&/^\d{4}-\d{2}-\d{2}$/.test(value))return value.split('-').reverse().join('/');
+  if((name==='renda_mensal'||name==='valor_imovel')&&/^\d+(?:\.\d{1,2})?$/.test(value)&&Number.isFinite(Number(value)))return money(Number(value));
+  return value;
+}
+function readFormURL(){
+  const params=new URLSearchParams(location.search);
+  if(!draftFields.some(name=>params.has(name)))return null;
+  const saved={};
+  for(const name of draftFields)if(params.has(name))saved[name]=formValueFromURL(name,params.get(name));
+  return saved;
+}
+function updateFormURL(){
+  clearTimeout(formURLTimer);
+  if(restoringDraft)return;
+  try{
+    const url=new URL(location.href);
+    for(const name of draftFields){
+      const value=formURLValue(name,form.elements.namedItem(name).value);
+      if(value)url.searchParams.set(name,value);else url.searchParams.delete(name);
+    }
+    if(url.href!==location.href)history.replaceState(history.state,'',url.href);
+  }catch{}
+}
+function scheduleFormURL(){
+  clearTimeout(formURLTimer);
+  if(!restoringDraft)formURLTimer=setTimeout(updateFormURL,250);
+}
+function clearFormURL(){
+  clearTimeout(formURLTimer);
+  try{
+    const url=new URL(location.href);
+    for(const name of draftFields)url.searchParams.delete(name);
+    if(url.href!==location.href)history.replaceState(history.state,'',url.href);
+  }catch{}
+}
 function saveDraft(){
  if(restoringDraft)return;
  try{const values={};for(const name of draftFields)values[name]=form.elements.namedItem(name).value;localStorage.setItem(draftKey,JSON.stringify(values));}catch{}
+ scheduleFormURL();
 }
-function clearDraft(){draftRevision++;try{localStorage.removeItem(draftKey);}catch{}}
-form.addEventListener('input',()=>{draftRevision++;saveDraft();});form.addEventListener('change',()=>{draftRevision++;saveDraft();});
+function clearDraft(){draftRevision++;try{localStorage.removeItem(draftKey);}catch{}clearFormURL();}
+form.addEventListener('input',()=>{draftRevision++;saveDraft();});form.addEventListener('change',()=>{draftRevision++;saveDraft();updateFormURL();});
+form.addEventListener('submit',updateFormURL);
 async function restoreDraft(){
- let saved;try{saved=JSON.parse(localStorage.getItem(draftKey)||'null');}catch{return;}
+ let saved=readFormURL();
+ if(!saved){try{saved=JSON.parse(localStorage.getItem(draftKey)||'null');}catch{return;}}
  if(!saved||typeof saved!=='object')return;
  restoringDraft=true;const draftAtStart=draftRevision;
  try{
-  for(const name of draftFields){if(typeof saved[name]!=='string'||(name==='perfil'&&!['cliente','corretor'].includes(saved[name])))continue;const field=form.elements.namedItem(name);if(field instanceof RadioNodeList){for(const radio of field)radio.checked=radio.value===saved[name];}else field.value=name==='data_nascimento'&&/^\d{4}-\d{2}-\d{2}$/.test(saved[name])?saved[name].split('-').reverse().join('/'):saved[name];}
+  for(const name of draftFields){
+    if(['uf','municipio','regiao'].includes(name)||typeof saved[name]!=='string')continue;
+    const field=form.elements.namedItem(name);
+    if(field instanceof RadioNodeList){for(const radio of field)radio.checked=radio.value===saved[name];}
+    else field.value=name==='data_nascimento'&&/^\d{4}-\d{2}-\d{2}$/.test(saved[name])?saved[name].split('-').reverse().join('/'):saved[name];
+  }
   restoreBirthDateParts();updateGate();
   resetLocation();form.uf.value='';
   syncLocation(initialValid());
- }finally{restoringDraft=false;saveDraft();}
+  if(saved.uf){
+    await statesReady;
+    if(draftRevision!==draftAtStart)return;
+    if(!Array.from(form.uf.options).some(option=>option.value===saved.uf))return;
+    form.uf.value=saved.uf;locationEdited=true;
+    await loadCities();
+    if(draftRevision!==draftAtStart)return;
+    const city=typeof saved.municipio==='string'?cities.find(item=>normalize(item.nome)===normalize(saved.municipio)):null;
+    if(city)chooseCity(city,false);
+    else if(typeof saved.municipio==='string')cityInput.value=saved.municipio;
+    if(city&&['leste','oeste','norte','sul','centro'].includes(saved.regiao))form.regiao.value=saved.regiao;
+    syncLocation(initialValid());
+  }
+ }finally{restoringDraft=false;saveDraft();updateSimulateButton();}
 }
 restoreDraft();
 
-form.addEventListener('input',updateSimulateButton);form.addEventListener('change',updateSimulateButton);form.addEventListener('reset',()=>setTimeout(()=>{restoreBirthDateParts();birthDateParts.forEach(input=>input.removeAttribute('aria-invalid'));updateSimulateButton();},0));document.addEventListener('gatechange',updateSimulateButton);statesReady.then(updateSimulateButton);updateSimulateButton();
+form.addEventListener('input',updateSimulateButton);form.addEventListener('change',updateSimulateButton);form.addEventListener('reset',()=>setTimeout(()=>{form.data_nascimento.value='';restoreBirthDateParts();birthDateParts.forEach(input=>input.removeAttribute('aria-invalid'));updateSimulateButton();saveDraft();updateFormURL();},0));document.addEventListener('gatechange',updateSimulateButton);statesReady.then(updateSimulateButton);updateSimulateButton();
+
 
