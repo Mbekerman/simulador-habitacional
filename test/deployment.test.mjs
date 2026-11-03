@@ -34,3 +34,19 @@ test('servidor inicia sem segredos e responde ao healthcheck', async () => {
     assert.equal((await (await fetch(base+'/api/config')).json()).authenticated,false);
   }finally{child.kill();}
 });
+
+test('no Cloud Run escuta em todas as interfaces e aceita a origem https', async () => {
+  const probe=net.createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');
+  const port=probe.address().port;await new Promise(resolve=>probe.close(resolve));
+  const env={...process.env,PORT:String(port),K_SERVICE:'simulador-caixa'};
+  delete env.HOST;delete env.RAILWAY_PROJECT_ID;delete env.GOOGLE_APPLICATION_CREDENTIALS;delete env.GOOGLE_SERVICE_ACCOUNT_JSON;delete env.SIMULADOR_API_TOKEN;
+  const child=spawn(process.execPath,['server.mjs'],{cwd:new URL('..',import.meta.url),env,stdio:['ignore','pipe','pipe']});
+  try{
+    await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Servidor não iniciou')),10000);child.stdout.on('data',()=>{clearTimeout(timeout);resolve();});child.once('error',reject);child.once('exit',code=>{clearTimeout(timeout);reject(new Error('Servidor encerrou: '+code));});});
+    const base='http://127.0.0.1:'+port,host='127.0.0.1:'+port;
+    assert.equal((await fetch(base+'/health')).status,200);
+    const post=origin=>fetch(base+'/api/simulate',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:'{}'});
+    assert.equal((await post('https://'+host)).status,400);
+    assert.equal((await post('http://'+host)).status,403);
+  }finally{child.kill();}
+});

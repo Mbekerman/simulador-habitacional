@@ -1,14 +1,23 @@
 import { GoogleAuth } from 'google-auth-library';
 import { readFile } from 'node:fs/promises';
 const id='1tk_0Mx8k_9V5VToePJAIaklw3eO_1xcBG8BpwD4wo0Y';
+const contaServico='simulador-caixa@simulador-caixa-511114.iam.gserviceaccount.com';
 let clientPromise,queue=Promise.resolve();
 async function client(){
  if(!clientPromise)clientPromise=(async()=>{
+  const scopes=['https://www.googleapis.com/auth/spreadsheets'];
   const raw=process.env.GOOGLE_SERVICE_ACCOUNT_JSON || (process.env.GOOGLE_APPLICATION_CREDENTIALS?await readFile(process.env.GOOGLE_APPLICATION_CREDENTIALS,'utf8'):null);
-  if(!raw)throw new Error('Credencial da planilha não configurada.');
-  const credentials=JSON.parse(raw);
-  if(credentials.client_email!=='simulador-caixa@simulador-caixa-511114.iam.gserviceaccount.com')throw new Error('Conta de serviço incorreta.');
-  return await new GoogleAuth({credentials,scopes:['https://www.googleapis.com/auth/spreadsheets']}).getClient();
+  if(raw){
+   const credentials=JSON.parse(raw);
+   if(credentials.client_email!==contaServico)throw new Error('Conta de serviço incorreta.');
+   return await new GoogleAuth({credentials,scopes}).getClient();
+  }
+  // Sem JSON: a conta de serviço do próprio Cloud Run (sem chave guardada).
+  if(!process.env.K_SERVICE)throw new Error('Credencial da planilha não configurada.');
+  const auth=new GoogleAuth({scopes});
+  const {client_email}=await auth.getCredentials();
+  if(client_email!==contaServico)throw new Error('Conta de serviço incorreta.');
+  return await auth.getClient();
  })().catch(error=>{clientPromise=null;throw error;});
  return clientPromise;
 }

@@ -6,6 +6,8 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('.', import.meta.url));
 const port = Number(process.env.PORT || 3000);
+// Atrás de proxy HTTPS (Cloud Run define K_SERVICE; Railway, RAILWAY_PROJECT_ID).
+const hosted = Boolean(process.env.K_SERVICE || process.env.RAILWAY_PROJECT_ID);
 const api = process.env.SIMULADOR_API_URL || 'https://simulador-cx.up.railway.app';
 const fixedKeys = ['tipo_financiamento','categoria_imovel','possui_subsidio_fgts_uniao','possui_imovel_municipio','relacionamento_caixa','servidor_publico','conta_salario','autoriza_armazenamento','sistema_amortizacao'];
 const types = { '/': ['index.html','text/html'], '/app.js':['app.js','text/javascript'], '/style.css':['style.css','text/css'] };
@@ -48,7 +50,7 @@ http.createServer(async (req,res) => {
     if(req.method==='GET'&&(path==='/api/ufs'||/^\/api\/municipios\/[A-Z]{2}$/.test(path))){try{send(res,200,await locationData(path));}catch{send(res,502,{error:'Não foi possível carregar a localização. Tente novamente.'});}return;}
     if(path==='/api/config' && req.method==='GET') {const cfg=await config();send(res,200,{pending:fixedKeys.filter(key=>cfg[key]===null||cfg[key]===undefined||cfg[key]===''),authenticated:Boolean(process.env.SIMULADOR_API_TOKEN)});return;}
     if(!['/api/simulate','/api/location-result'].includes(path)||req.method!=='POST'){send(res,404,{error:'Página não encontrada.'});return;}
-    if(req.headers.origin && req.headers.origin!==`${process.env.RAILWAY_PROJECT_ID?'https':'http'}://${req.headers.host}`){send(res,403,{error:'Origem inválida.'});return;}
+    if(req.headers.origin && req.headers.origin!==`${hosted?'https':'http'}://${req.headers.host}`){send(res,403,{error:'Origem inválida.'});return;}
     let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>16000){send(res,413,{error:'Dados muito longos.'});return;}}
     let data;try{data=JSON.parse(raw);}catch{send(res,400,{error:'Dados inválidos.'});return;}
     if(path==='/api/location-result'){
@@ -66,7 +68,7 @@ http.createServer(async (req,res) => {
     const payload={...cfg,sistema_amortizacao:data.sistema_amortizacao==='SAC'?'SAC':'PRICE',uf:data.uf,municipio:data.municipio,cpf:data.cpf,telefone:data.telefone,data_nascimento:data.data_nascimento,renda_mensal:data.renda_mensal,valor_imovel:data.valor_imovel,trabalho_fgts_3_anos:data.trabalho_fgts_3_anos,outro_comprador:data.outro_comprador};
     if(data.record===true&&!data.telemetry?.ip){
       data.telemetry={...data.telemetry};
-      try{const address=req.socket.remoteAddress;const local=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(address);const response=await fetch('https://ipwho.is/'+(local?'':address.replace(/^::ffff:/,'')),{signal:AbortSignal.timeout(3000)});const geo=await response.json();if(geo.success){data.telemetry.ip=geo.ip;data.telemetry.ipLocation=[geo.city,geo.region,geo.country].filter(Boolean).join(', ');}}catch{}
+      try{const forwarded=hosted?String(req.headers['x-forwarded-for']||'').split(',')[0].trim():'';const address=forwarded||req.socket.remoteAddress;const local=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(address);const response=await fetch('https://ipwho.is/'+(local?'':address.replace(/^::ffff:/,'')),{signal:AbortSignal.timeout(3000)});const geo=await response.json();if(geo.success){data.telemetry.ip=geo.ip;data.telemetry.ipLocation=[geo.city,geo.region,geo.country].filter(Boolean).join(', ');}}catch{}
     }
     const recordedAt=new Date();let result=null,simulationError=null;
     try{result=await configuredSimulation(payload);}catch(error){simulationError=error.name==='TimeoutError'?'A simulação demorou mais que o esperado. Tente novamente.':error.message;}
@@ -75,4 +77,4 @@ http.createServer(async (req,res) => {
     if(simulationError){send(res,502,{error:simulationError,spreadsheet:sheetStatus});return;}
     send(res,200,{...result,spreadsheet:sheetStatus});
   }catch(error){send(res,502,{error:error.name==='TimeoutError'?'A simulação demorou mais que o esperado. Tente novamente.':'Não foi possível concluir a solicitação.'});}
-}).listen(port,process.env.HOST || (process.env.RAILWAY_PROJECT_ID?'0.0.0.0':'127.0.0.1'),()=>console.log(`Local: http://localhost:${port}`));
+}).listen(port,process.env.HOST || (hosted?'0.0.0.0':'127.0.0.1'),()=>console.log(`Local: http://localhost:${port}`));
