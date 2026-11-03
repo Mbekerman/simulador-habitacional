@@ -34,7 +34,20 @@ test('servidor inicia sem segredos e responde ao healthcheck', async () => {
   const {child,base}=await start();
   try{
     const response=await fetch(base+'/health');assert.equal(response.status,200);assert.equal((await response.json()).status,'ok');
-    assert.equal((await fetch(base+'/')).status,200);
+    const home=await fetch(base+'/');assert.equal(home.status,200);
+    const html=await home.text();
+    assert.match(html,/<title>SIMULADOR CAIXA – Simulador simplificado de financiamento habitacional<\/title>/);
+    assert.match(html,/rel="canonical" href="https:\/\/www\.simuladorcaixa\.com\/"/);
+    assert.match(html,/<h1 id="title">SIMULADOR CAIXA<\/h1>/);
+    assert.match(html,/Este simulador é independente e não é um serviço oficial da Caixa Econômica Federal\. Os valores são estimativas\./);
+    assert.equal(home.headers.get('location'),null);
+    const robots=await fetch(base+'/robots.txt');assert.equal(robots.status,200);
+    assert.match(robots.headers.get('content-type'),/^text\/plain/);
+    const robotsBody=await robots.text();
+    assert.match(robotsBody,/User-agent: \*/);assert.match(robotsBody,/Allow: \//);assert.match(robotsBody,/Sitemap: https:\/\/www\.simuladorcaixa\.com\/sitemap\.xml/);
+    const sitemap=await fetch(base+'/sitemap.xml');assert.equal(sitemap.status,200);
+    assert.match(sitemap.headers.get('content-type'),/^application\/xml/);
+    assert.match(await sitemap.text(),/<loc>https:\/\/www\.simuladorcaixa\.com\/<\/loc>/);
     assert.equal((await (await fetch(base+'/api/config')).json()).authenticated,false);
   }finally{child.kill();}
 });

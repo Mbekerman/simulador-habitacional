@@ -23,7 +23,7 @@ function clientIP(req){
  return forwarded.length?forwarded[forwarded.length-1]:address;
 }
 const fixedKeys = ['tipo_financiamento','categoria_imovel','possui_subsidio_fgts_uniao','possui_imovel_municipio','relacionamento_caixa','servidor_publico','conta_salario','autoriza_armazenamento','sistema_amortizacao'];
-const types = { '/': ['index.html','text/html'], '/app.js':['app.js','text/javascript'], '/style.css':['style.css','text/css'] };
+const types = { '/': ['index.html','text/html'], '/app.js':['app.js','text/javascript'], '/style.css':['style.css','text/css'], '/robots.txt':['robots.txt','text/plain'], '/sitemap.xml':['sitemap.xml','application/xml'] };
 const send = (res,status,data) => {res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
 const locationCache=new Map();const gpsUpdates=new Map();
 async function locationData(path){
