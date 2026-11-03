@@ -20,17 +20,31 @@ test('registro preserva zeros, CPF como texto e fuso de Brasília', () => {
   assert.equal(row[16],'12:00:00');
 });
 
-test('servidor inicia sem segredos e responde ao healthcheck', async () => {
+async function start(extra={}){
   const probe=net.createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');
   const port=probe.address().port;await new Promise(resolve=>probe.close(resolve));
-  const env={...process.env,PORT:String(port),HOST:'127.0.0.1'};
-  delete env.GOOGLE_APPLICATION_CREDENTIALS;delete env.GOOGLE_SERVICE_ACCOUNT_JSON;delete env.SIMULADOR_API_TOKEN;
+  const env={...process.env,PORT:String(port),HOST:'127.0.0.1',...extra};
+  delete env.GOOGLE_APPLICATION_CREDENTIALS;delete env.GOOGLE_SERVICE_ACCOUNT_JSON;delete env.SIMULADOR_API_TOKEN;delete env.RAILWAY_PROJECT_ID;
   const child=spawn(process.execPath,['server.mjs'],{cwd:new URL('..',import.meta.url),env,stdio:['ignore','pipe','pipe']});
+  await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Servidor não iniciou')),10000);child.stdout.on('data',()=>{clearTimeout(timeout);resolve();});child.once('error',reject);child.once('exit',code=>{clearTimeout(timeout);reject(new Error('Servidor encerrou: '+code));});});
+  return {child,base:'http://127.0.0.1:'+port,port};
+}
+
+test('servidor inicia sem segredos e responde ao healthcheck', async () => {
+  const {child,base}=await start();
   try{
-    await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Servidor não iniciou')),10000);child.stdout.on('data',()=>{clearTimeout(timeout);resolve();});child.once('error',reject);child.once('exit',code=>{clearTimeout(timeout);reject(new Error('Servidor encerrou: '+code));});});
-    const base='http://127.0.0.1:'+port;
     const response=await fetch(base+'/health');assert.equal(response.status,200);assert.equal((await response.json()).status,'ok');
     assert.equal((await fetch(base+'/')).status,200);
     assert.equal((await (await fetch(base+'/api/config')).json()).authenticated,false);
+  }finally{child.kill();}
+});
+
+test('PUBLIC_HTTPS exige origem https do próprio host', async () => {
+  const {child,base,port}=await start({PUBLIC_HTTPS:'1'});
+  try{
+    const post=origin=>fetch(base+'/api/simulate',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:'{}'});
+    assert.equal((await post('http://127.0.0.1:'+port)).status,403);
+    assert.equal((await post('https://evil.example')).status,403);
+    assert.equal((await post('https://127.0.0.1:'+port)).status,400);
   }finally{child.kill();}
 });
