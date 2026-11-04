@@ -1,14 +1,13 @@
 import { GoogleAuth } from 'google-auth-library';
-import { readFile } from 'node:fs/promises';
 const id='1tk_0Mx8k_9V5VToePJAIaklw3eO_1xcBG8BpwD4wo0Y';
+const scopes=['https://www.googleapis.com/auth/spreadsheets'];
 let clientPromise,queue=Promise.resolve();
 async function client(){
  if(!clientPromise)clientPromise=(async()=>{
-  const raw=process.env.GOOGLE_SERVICE_ACCOUNT_JSON || (process.env.GOOGLE_APPLICATION_CREDENTIALS?await readFile(process.env.GOOGLE_APPLICATION_CREDENTIALS,'utf8'):null);
-  if(!raw)throw new Error('Credencial da planilha não configurada.');
-  const credentials=JSON.parse(raw);
-  if(credentials.client_email!=='simulador-caixa@simulador-caixa-511114.iam.gserviceaccount.com')throw new Error('Conta de serviço incorreta.');
-  return await new GoogleAuth({credentials,scopes:['https://www.googleapis.com/auth/spreadsheets']}).getClient();
+  // Local/legado: JSON explícito. Cloud Run: Application Default Credentials da conta de serviço do serviço.
+  const raw=process.env.GOOGLE_SERVICE_ACCOUNT_JSON || null;
+  if(raw)return await new GoogleAuth({credentials:JSON.parse(raw),scopes}).getClient();
+  return await new GoogleAuth({scopes}).getClient();
  })().catch(error=>{clientPromise=null;throw error;});
  return clientPromise;
 }

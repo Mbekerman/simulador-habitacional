@@ -1,31 +1,36 @@
-# Deploy automático no Railway
+# Deploy no Google Cloud Run
 
-Fluxo: push em `main` → GitHub Actions (instalação, sintaxe e testes) → Railway.
+Projeto `simulador-caixa-bkm`, região `southamerica-east1`, serviço `simulador-caixa`.
 
-## Conexão
+## Recursos
 
-1. Publicar este repositório no GitHub.
-2. No projeto Railway `Simulador Caixa`, conectar um serviço ao repositório com branch `main`.
-3. Ativar **Wait for CI** nas configurações do serviço para aguardar sucesso do workflow `CI`.
-4. Configurar as variáveis do servidor:
-   - `SIMULADOR_API_TOKEN`: chave da API de simulação.
-   - `GOOGLE_SERVICE_ACCOUNT_JSON`: conteúdo JSON da conta de serviço já compartilhada com a planilha.
-   - `SIMULADOR_API_URL`: opcional; padrão `https://simulador-cx.up.railway.app`.
-5. Gerar um domínio público Railway.
+- Artifact Registry: `southamerica-east1-docker.pkg.dev/simulador-caixa-bkm/simulador/simulador-caixa`
+- Conta de build: `simulador-build@simulador-caixa-bkm.iam.gserviceaccount.com` (artifactregistry.writer, logging.logWriter, storage.objectViewer)
+- Conta de execução: `simulador-runtime@simulador-caixa-bkm.iam.gserviceaccount.com`
+  - lê o segredo `simulador-api-token` (Secret Manager)
+  - grava na planilha via Application Default Credentials: compartilhe a planilha com este e-mail como **Editor**
+- Variáveis: `PUBLIC_HTTPS=1`, `SIMULADOR_API_URL=https://simulador-cx.up.railway.app`, `SIMULADOR_API_TOKEN` (segredo)
 
-O Railway instala dependências, inicia com `npm start` e verifica `/health` usando `railway.json`.
-O servidor escuta `0.0.0.0` em Railway e usa a porta fornecida por `PORT`.
-Mantenha uma réplica: a fila de gravação em Sheets e os tokens de atualização GPS são mantidos em memória por processo.
+## Publicar
 
-## Segredos
+```sh
+P=simulador-caixa-bkm
+IMG=southamerica-east1-docker.pkg.dev/$P/simulador/simulador-caixa:$(date +%Y%m%d-%H%M%S)
+gcloud builds submit . --config=cloudbuild.yaml --substitutions=_IMAGE=$IMG --region=southamerica-east1 --project=$P
+gcloud run deploy simulador-caixa --image=$IMG --region=southamerica-east1 --project=$P \
+  --service-account=simulador-runtime@$P.iam.gserviceaccount.com --max-instances=1 --port=8080 \
+  --set-env-vars=SIMULADOR_API_URL=https://simulador-cx.up.railway.app,PUBLIC_HTTPS=1 \
+  --set-secrets=SIMULADOR_API_TOKEN=simulador-api-token:latest --no-invoker-iam-check
+```
 
-Não incluir chaves no Git, no workflow nem no navegador. A configuração local pode usar
-`GOOGLE_APPLICATION_CREDENTIALS` com o caminho do JSON; em Railway use `GOOGLE_SERVICE_ACCOUNT_JSON`.
-Não é necessário token Railway nos GitHub Actions quando o deploy usa a integração nativa.
+Trocar a chave da API: `printf %s "$NOVA" | gcloud secrets versions add simulador-api-token --data-file=- --project=simulador-caixa-bkm` e publicar uma nova revisão.
+
+## Notas
+
+- Mantenha `max-instances=1`: a fila de gravação em Sheets e os tokens de GPS ficam em memória.
+- O IP do cliente é o último valor de `X-Forwarded-For` (acrescentado pelo proxy do Google).
+- `POST` só aceita `Origin` igual a `https://<host>` ou `PUBLIC_ORIGIN`.
 
 ## Verificação
 
-Execute `npm ci`, `npm run check` e `npm test`. Após conectar, faça um push em `main`
-e confirme o workflow aprovado e o novo commit implantado no Railway.
-
-A conexão remota e a ativação de Wait for CI ainda precisam ser concluídas.
+`npm ci && npm run check && npm test`
